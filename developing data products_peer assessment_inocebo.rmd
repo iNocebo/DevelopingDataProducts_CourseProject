@@ -1,0 +1,145 @@
+---
+title: 'Developing Data Products: Peer Assessment - Vancomycin Dose Adaption in Renal Insufficiency'
+output:
+  pdf_document: default
+  html_document:
+    keep_md: yes
+---
+
+Author: iNocebo | Dominik Stämpfli  
+Course: devdataprod-034, November 2015 
+
+ 
+## Introduction 
+Vancomycin is a glycopeptide antibiotic used for severe bacterial infections, especially for the treatment of Methicillin-resistant Staphylococcus aureus - also known as MRSA [1]. Thorough consideration of the use of Vancomycin and its dosing is needed to prevent the further emergence of resistant bacteria and to protect the patient from serious adverse drug reaction. But appropriate dosing requires the consideration of patient characteristics (weight, renal function) and infections characteristics (pathogen, infection site). For this reason, monitoring Vancomycin concentrations is an established service in many hospital laboratories and pharmacies. Monitoring trough concentrations - the concentration present in the body 30 minutes before administering the next dose when Vancomycin load is at its lowest - was shown to correlate with positive outcomes considering therapy efficacy: Trough concentration of 10 - 15 mg/L should be achieved for best therapeutic outcomes in non-severe infections [1, 2]. Monitoring peak concentrations - the concentration present one hour after the administration of a intra-venious infusion when Vancomycin load is at its highest - was shown to be associated with adverse drug reactions [1, 2]. Adverse drug reactions for Vancomycin include: Renal damage, hearing impairment and rash [3]. Vancomycin elimation out of the body is heavily dependant on the renal function of the patient: Renal impairment slows the elimination of Vancomycin, leading to a accumulation of the drug within the body. In patients with renal impairment, Vancomycin dosing must be lowered or the application interval must be widened. Renal function is measured as a function of Creatinine clearance, which may be calculated when plasma concentrations of Creatinine are known.
+The aim of this project was to develop an easy to use application to monitor patients receiving a Vancomycin treatment. The application should support clinical decision makers in their choice of drug doses and dosing intervals. 
+ 
+## Methods 
+A {shiny} application was written, consisting of ui.R and server.R: ui.R allows for the necessary inputs concerning patient characteristics and current dosing regimen and presents the processed data back to the user; server.R includes the necessary pharmakokinetic calculations to process the input data and estimate through and peak concentrations of Vancomycin in the subject.
+Necessary information about the patient are: Sex, age, body weight, and Creatinine plasma concentration. Information needed about the dosing regimen are: Current dose and application interval. Based on the patient characteristics the renal function will be calculated. Considering the current renal function, patient-specific drug characteristics will be calculated.
+ 
+## Results/Conclusion 
+Using ui.R and server.R patient-specific dosing may be achieved. The application allows for instant trough and peak concentration calculations when patient characteristics needed for renal function estimations and current dosing regimen are entered. This instant calculation may be used by clinical decision makers "to play around" with various dosing regimens to find the one best suited for the individual patient. 
+ 
+## Credits 
+- [R](http://www.R-project.org): R Development Core Team (2008). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. ISBN 3-900051-07-0 
+- RStudio: Version 0.99.489 
+- [{shiny}](http://CRAN.R-project.org/package=shiny): Winston Chang, Joe Cheng, JJ Allaire, Yihui Xie and Jonathan McPherson (2015). shiny: Web Application Framework for R. R package version 0.12.2.
+ 
+## Literature 
+- [1] Drew RH. [UpToDate](www.uptodate.com): Vancomycin dosing and serum concentration monitorin in adults, 2014. Retrieved: 27.04.2015.
+- [2] University of Heidelberg. [Dosing.de](www.dosing.de): Vancomycin Dose Adaption in Renal Insufficiency, 2013. Retrieved: 27.04.2015.
+- [3] Official Swiss Medicinces Information for Health Care Professionals. Retrieved: [Swissmedicinfo](wwww.swissmedicinfo.ch), 27.04.2015.
+ 
+## Appendix: Code ui.R
+```{r ui.R, eval=FALSE, message=FALSE, warning=FALSE}
+shinyUI(fluidPage(
+        
+        titlePanel("Vancomycin Dose Adaption in Renal Insufficiency"),
+        
+        sidebarLayout(
+                
+                sidebarPanel(
+                        h3("Patient data"),
+                        p("Please enter patient data"),
+                        radioButtons("sex", label = "Gender", choices = c("male", "female")),
+                        numericInput("age", "Age", value = 45, min = 0, max = 110, 
+                                     step = 1.0),
+                        numericInput("bw", "Body weight in kg", value = 70, min = 5, 
+                                     max = 140, step = 1.0),
+                        numericInput("crea", "Creatinine plasma concentration [µmol/L]", 
+                                     value = 70, min = 0.0, max = 300, step = 1.0),
+                        h3("Drug data"),
+                        p("Please enter data on the current dosage regimen"),
+                        numericInput("doset1", "Current dosage [mg]", value = 1000, min = 50,
+                                     max = 2000, step = 25),
+                        numericInput("int", "Dosing interval [h]", value = 12, min = 1,
+                                     max = 48, step = 1),
+                        submitButton("calculate")
+                ),
+                
+                mainPanel(
+                        tabsetPanel(
+                                tabPanel("Data input mirror", textOutput("mirror")), 
+                                tabPanel("Patient specific pharmakokinetics", tableOutput("pharmakokinetics")),
+                                tabPanel("Documentation", textOutput("documentation"))
+                                )
+                )
+        )
+))
+``` 
+ 
+## Appendix: Code server.R 
+```{r server.R, eval=FALSE, message=FALSE, warning=FALSE}
+## Sex determines the constant present in the Creatinine clearance function. The
+## switch allows the processing of the input sex.
+clearance_sex <- function(sex) switch(sex,
+                                      Male = 1.23,
+                                      Female = 1.03)
+## Creatinine clearance function
+creatinineClearance <- function(sex, bw, age, crea) sex * ((bw * (140 - age)) / crea)
+## Vacnomycin clearance function
+vancomycinClearance <- function(creaclear) (0.689 * creaclear + 3.66) * 60 / 1000
+## Distribution volume function
+distributionVolume <- function(bw) 0.72 * bw
+## Calculation of the half-life of Vancomycin in the body (how many hours until
+## half of the present dose is excreted?)
+halfLife <- function(vancclear, distr) logb(2, exp(1)) / (vancclear / distr)
+## Peak concentration function
+peak <- function(doset1, distr, vancclear, int) (doset1 / distr) * 
+        (1/(1-exp(-(vancclear / distr)*int)))
+## Trough concentration function
+trough <- function(doset1, distr, vancclear, int) (doset1 / distr) * 
+        (1/(1-exp(-(vancclear / distr)*int))) * exp(-(vancclear / distr)*int)
+
+shinyServer(
+        function(input, output) {
+                output$mirror <- renderText({
+                        paste("Vancomycin dose adaption for a ", input$sex, "patient, age ", input$age,",", input$bw, "kg, with a creatinine plasma concentration of ",input$crea, "µmol/L and a current vancomycin dose of ", input$doset1," mg, applied every", input$int, "hours")
+                })
+                temp_sex <- reactive({clearance_sex(input$sex)})
+                temp_clearance <- reactive({creatinineClearance(temp_sex(), input$bw, input$age, input$crea)})
+                temp_vancClearance <- reactive({vancomycinClearance(temp_clearance())})
+                temp_distr <- reactive({distributionVolume(input$bw)})
+                temp_hl <- reactive({halfLife(temp_vancClearance(), temp_distr())})
+                temp_peak <- reactive({round(peak(input$doset1, temp_distr(), temp_vancClearance(), input$int), 2)})
+                temp_trough <- reactive({round(trough(input$doset1, temp_distr(), temp_vancClearance(), input$int), 2)})
+                output$pharmakokinetics <- renderTable({
+                        df <- data.frame(c(temp_clearance(), temp_vancClearance(), temp_distr(), temp_hl(), temp_peak(), temp_trough()))
+                        explanations <- c("> 89 mL/Min: normal kidney function; 89 - 60 mL/Min: mild renal impairment; 59 - 30 mL/Min: moderate renal impairment; 15 - 29 mL/Min: severe renal impairment; < 15 mL/Min: kidney failure", "How many litres of blood will be cleaned of Vancomycin in 1 hour?", "The theoretical volume Vancomycin will dilute itself into", "How many hours until only half of Vancomycin is still present in the body?", "Concentrations of above 20 mg/L may be toxic and lead to serious adverse drug reactions", "In the setting of non-invasive infections target trough concentration is 10 to 15 mg/L. Concentrations below 10 mg/L will promote the emergence of bacteria with elevated Vancomycin inhibitory concentrations")
+                        df <- cbind(df, explanations)
+                        rownames(df) <- c("Creatinine clearance [mL/Min]", "Clearance of Vancomycin [L/h]", "Volume of distribution [L]", "Half-Life of Vancomycin [h]", "Peak concentration [mg/L]", "Trough concentration [mg/L]")
+                        colnames(df) <- c("Value", "Explanation")
+                        df
+                })
+                output$documentation <- renderText({
+                        paste("Vancomycin is a glycopeptide antibiotic used for 
+severe bacterial infections, especially for the treatment of Methicillin-resistant 
+Staphylococcus aureus - also known as MRSA. Thorough consideration of the use of 
+Vancomycin and its dosing is needed to prevent the further emergence of resistant 
+bacteria and to protect the patient from serious adverse drug reactions. 
+But appropriate dosing requires the consideration of patient characteristics 
+(weight, renal function) and infection characteristics (pathogen, infection site).
+For this reason, monitoring Vancomycin concentrations is an established service in 
+many hospital laboratories and pharmacies. Monitoring trough concentrations - 
+the concentration present in the body 30 minutes before administering the next dose
+when Vancomycin load is at its lowest - was shown to correlate with positive outcomes
+considering therapy efficacy: Trough concentration of 10 - 15 mg/L should be achieved
+for best therapeutic outcomes in non-severe infections. Monitoring peak concentrations
+- the concentration present one hour after the administration of a intra-veneious
+infusion when Vancomycin load is at its highest - was shown to be associated with
+adverse drug reactions. Adverse drug reactions for Vancomycin include: Renal damage,
+hearing impairment, and rash. Vancomycin elimation out of the body is heavily dependant
+on the renal function of the patient: Renal impairment slows the elimination of 
+Vancomycin, leading to a accumulation of the drug within the body. In patients with
+renal impairment, Vancomycin dosing must be lowered or the application interval must
+be widened. Renal function is measured as a function of Creatinine clearance, which 
+may be calculated when plasma concentrations of Creatinine, age, gender and bodyweight are known.
+The aim of this project was to develop an easy to use application to monitor patients
+receiving a Vancomycin treatment. The application should support clinical decision makers
+                              in their choice of drug doses and dosing intervals.")
+                })
+    
+        }
+)
+``` 
